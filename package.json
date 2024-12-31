@@ -125,8 +125,6 @@
     "concurrently": "7.6.0",
     "deep-object-diff": "^1.1.9",
     "depcheck": "1.4.3",
-    "esbuild": "^0.24.2",
-    "esbuild-runner": "^2.2.2",
     "eslint": "9.5.0",
     "globals": "15.6.0",
     "kill-port": "2.0.1",
@@ -144,7 +142,6 @@
     "stylelint-config-standard-scss": "^7.0.1",
     "stylelint-scss": "^4.5.0",
     "supertest": "6.3.3",
-    "ts-node": "^10.9.2",
     "vitest": "2.1.1"
   },
   "dependencies": {
@@ -167,6 +164,7 @@
     "property-graph": "^2.0.0",
     "react-ga4": "^2.1.0",
     "three": "0.158.0",
+    "ts-node": "10.9.2",
     "typescript": "5.4.5"
   }
 }

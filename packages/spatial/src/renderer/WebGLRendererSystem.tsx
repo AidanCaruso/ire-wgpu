@@ -25,18 +25,7 @@ Infinite Reality Engine. All Rights Reserved.
 
 import { NormalPass, RenderPass, SMAAPreset } from 'postprocessing'
 import React, { useEffect } from 'react'
-import {
-  ArrayCamera,
-  Color,
-  CubeTexture,
-  FogBase,
-  Object3D,
-  Scene,
-  SRGBColorSpace,
-  Texture,
-  WebGLRenderer,
-  WebGLRendererParameters
-} from 'three'
+import { ArrayCamera, Color, CubeTexture, FogBase, Object3D, Scene, Texture, WebGLRenderer } from 'three'
 
 import {
   ComponentType,
@@ -52,13 +41,21 @@ import {
   useComponent,
   useEntityContext
 } from '@ir-engine/ecs'
-import { defineState, getMutableState, getState, NO_PROXY, none, State, useMutableState } from '@ir-engine/hyperflux'
-
 import { S } from '@ir-engine/ecs/src/schemas/JSONSchemas'
+import { defineState, getMutableState, getState, NO_PROXY, none, State, useMutableState } from '@ir-engine/hyperflux'
 import { Effect, EffectComposer, EffectPass, OutlineEffect } from 'postprocessing'
+import { mat4, vec3 } from 'wgpu-matrix'
 import { CameraComponent } from '../camera/components/CameraComponent'
+import {
+  cubePositionOffset,
+  cubeUVOffset,
+  cubeVertexArray,
+  cubeVertexCount,
+  cubeVertexSize
+} from '../common/primitives/cube'
+import { basicFrag, basicVert } from '../common/shaders/basic'
 import { getNestedChildren } from '../transform/components/EntityTree'
-import { createWebXRManager, WebXRManager } from '../xr/WebXRManager'
+import { WebXRManager } from '../xr/WebXRManager'
 import { XRState } from '../xr/XRState'
 import { GroupComponent } from './components/GroupComponent'
 import { BackgroundComponent, EnvironmentMapComponent, FogComponent } from './components/SceneComponents'
@@ -71,7 +68,6 @@ import { changeRenderMode } from './functions/changeRenderMode'
 import { HighlightState } from './HighlightState'
 import { PerformanceManager, PerformanceState } from './PerformanceState'
 import { RendererState } from './RendererState'
-
 declare module 'postprocessing' {
   interface EffectComposer {
     EffectPass: EffectPass
@@ -83,7 +79,7 @@ declare module 'postprocessing' {
 }
 
 export const EffectSchema = S.Union([S.Any(), S.Type<Effect>(undefined, { isActive: S.Bool() })])
-
+export const uniformBufferSize = 4 * 16
 export const RendererComponent = defineComponent({
   name: 'RendererComponent',
 
@@ -94,10 +90,19 @@ export const RendererComponent = defineComponent({
 
       renderPass: S.Nullable(S.Type<RenderPass>()),
       normalPass: S.Nullable(S.Type<NormalPass>()),
-      renderContext: S.Nullable(S.Type<WebGLRenderingContext | WebGL2RenderingContext>()),
+      renderContext: S.Nullable(S.Type<GPUCanvasContext>()),
       effects: S.Record(S.String(), EffectSchema),
 
       canvas: S.Nullable(S.Type<HTMLCanvasElement>()),
+
+      device: S.Nullable(S.Type<GPUDevice>()),
+      pipeline: S.Nullable(S.Type<GPURenderPipeline>()),
+      depthTexture: S.Nullable(S.Type<GPUTexture>()),
+      uniformBuffer: S.Nullable(S.Type<GPUBuffer>()),
+      uniformBindGroup: S.Nullable(S.Type<GPUBindGroup>()),
+      renderPassDescriptor: S.Nullable(S.Type<GPURenderPassDescriptor>()),
+      verticesBuffer: S.Nullable(S.Type<GPUBuffer>()),
+      aspect: S.Number(1),
 
       renderer: S.Nullable(S.Type<WebGLRenderer>()),
       effectComposer: S.Nullable(S.Type<EffectComposer>()),
@@ -134,6 +139,135 @@ export const RendererComponent = defineComponent({
     const hightlightState = useMutableState(HighlightState)
     const renderSettings = useMutableState(RendererState)
     const effectComposerState = rendererComponent.effectComposer as State<EffectComposer>
+
+    useEffect(() => {
+      navigator.gpu.requestAdapter().then((a) => a?.requestDevice().then((d) => rendererComponent.device.set(d)))
+    }, [])
+
+    useEffect(() => {
+      if (!rendererComponent.device.value) return
+      const device = rendererComponent.device.value as GPUDevice
+      const pipeline = device.createRenderPipeline({
+        layout: 'auto',
+        vertex: {
+          module: device.createShaderModule({
+            code: basicVert
+          }),
+          buffers: [
+            {
+              arrayStride: cubeVertexSize,
+              attributes: [
+                {
+                  // position
+                  shaderLocation: 0,
+                  offset: cubePositionOffset,
+                  format: 'float32x4'
+                },
+                {
+                  // uv
+                  shaderLocation: 1,
+                  offset: cubeUVOffset,
+                  format: 'float32x2'
+                }
+              ]
+            }
+          ]
+        },
+        fragment: {
+          module: device.createShaderModule({
+            code: basicFrag
+          }),
+          targets: [
+            {
+              format: navigator.gpu.getPreferredCanvasFormat()
+            }
+          ]
+        },
+        primitive: {
+          topology: 'triangle-list',
+
+          // Backface culling since the cube is solid piece of geometry.
+          // Faces pointing away from the camera will be occluded by faces
+          // pointing toward the camera.
+          cullMode: 'back'
+        },
+
+        // Enable depth testing so that the fragment closest to the camera
+        // is rendered in front.
+        depthStencil: {
+          depthWriteEnabled: true,
+          depthCompare: 'less',
+          format: 'depth24plus'
+        }
+      })
+      rendererComponent.pipeline.set(pipeline)
+
+      const canvas = rendererComponent.canvas.value!
+      rendererComponent.depthTexture.set(
+        rendererComponent.device.value.createTexture({
+          size: [canvas.width, canvas.height],
+          format: 'depth24plus',
+          usage: GPUTextureUsage.RENDER_ATTACHMENT
+        })
+      )
+
+      canvas.getContext('webgpu')!.configure({
+        device,
+        format: navigator.gpu.getPreferredCanvasFormat()
+      })
+
+      rendererComponent.uniformBuffer.set(
+        device.createBuffer({
+          size: uniformBufferSize,
+          usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+        })
+      )
+
+      rendererComponent.uniformBindGroup.set(
+        device.createBindGroup({
+          layout: pipeline.getBindGroupLayout(0),
+          entries: [
+            {
+              binding: 0,
+              resource: {
+                buffer: rendererComponent.uniformBuffer.value as GPUBuffer
+              }
+            }
+          ]
+        })
+      )
+
+      rendererComponent.renderPassDescriptor.set({
+        colorAttachments: [
+          {
+            view: null!,
+
+            clearValue: [0.5, 0.5, 0.5, 1.0],
+            loadOp: 'clear',
+            storeOp: 'store'
+          }
+        ],
+        depthStencilAttachment: {
+          view: rendererComponent.depthTexture.get(NO_PROXY)!.createView(),
+
+          depthClearValue: 1.0,
+          depthLoadOp: 'clear',
+          depthStoreOp: 'store'
+        }
+      })
+
+      rendererComponent.verticesBuffer.set(
+        device.createBuffer({
+          size: cubeVertexArray.byteLength,
+          usage: GPUBufferUsage.VERTEX,
+          mappedAtCreation: true
+        })
+      )
+      new Float32Array(rendererComponent.verticesBuffer.value!.getMappedRange()).set(cubeVertexArray)
+      rendererComponent.verticesBuffer.value!.unmap()
+
+      rendererComponent.aspect.set(canvas.clientWidth / canvas.clientHeight)
+    }, [rendererComponent.device])
 
     useEffect(() => {
       if (!effectComposerState.value) return
@@ -191,110 +325,57 @@ export const RendererComponent = defineComponent({
 
     useEffect(() => {
       const canvas = rendererComponent.canvas.value as HTMLCanvasElement
-      const context = canvas.getContext('webgl2')
-
+      const context = canvas.getContext('webgpu')
       rendererComponent.renderContext.set(context)
     }, [])
 
     useEffect(() => {
-      const context = rendererComponent.renderContext.get(NO_PROXY) as WebGLRenderingContext | WebGL2RenderingContext
-      if (!context) return
-
+      // const context = rendererComponent.renderContext.get(NO_PROXY)
+      // if (!context) return
+      if (!rendererComponent.device.value) return
       const canvas = rendererComponent.canvas.get(NO_PROXY) as HTMLCanvasElement
 
-      const options: WebGLRendererParameters = {
-        precision: 'highp',
-        powerPreference: 'high-performance',
-        stencil: false,
-        antialias: false,
-        depth: true,
-        logarithmicDepthBuffer: false,
-        canvas,
-        context,
-        preserveDrawingBuffer: false,
-        //@ts-ignore
-        multiviewStereo: true
-      }
-
-      const renderer = new WebGLRenderer(options)
-      rendererComponent.renderer.set(renderer)
-      renderer.outputColorSpace = SRGBColorSpace
-
-      const composer = new EffectComposer(renderer)
-      rendererComponent.effectComposer.set(composer)
-      const renderPass = new RenderPass()
-      composer.addPass(renderPass)
-      rendererComponent.renderPass.set(renderPass)
-
-      // DISABLE THIS IF YOU ARE SEEING SHADER MISBEHAVING - UNCHECK THIS WHEN TESTING UPDATING THREEJS
-      renderer.debug.checkShaderErrors = false
-
-      const xrManager = createWebXRManager(renderer)
-      renderer.xr = xrManager as any
-      rendererComponent.merge({ xrManager })
-      xrManager.cameraAutoUpdate = false
-      xrManager.enabled = true
-
       const onResize = () => {
-        rendererComponent.needsResize.set(true)
+        canvas.width = canvas.clientWidth
+        canvas.height = canvas.clientHeight
+        rendererComponent.aspect.set(canvas.clientWidth / canvas.clientHeight)
+        rendererComponent.depthTexture.value?.destroy()
+        rendererComponent.depthTexture.set(
+          rendererComponent.device.value!.createTexture({
+            size: [canvas.width, canvas.height],
+            format: 'depth24plus',
+            usage: GPUTextureUsage.RENDER_ATTACHMENT
+          })
+        )
+        ;(rendererComponent.renderPassDescriptor.get(NO_PROXY)!.depthStencilAttachment!.view as GPUTextureView) =
+          rendererComponent.depthTexture.get(NO_PROXY)!.createView()
       }
 
-      // https://stackoverflow.com/questions/48124372/pointermove-event-not-working-with-touch-why-not
-      canvas.style.touchAction = 'none'
+      // // https://stackoverflow.com/questions/48124372/pointermove-event-not-working-with-touch-why-not
+      // canvas.style.touchAction = 'none'
       canvas.addEventListener('resize', onResize, false)
       window.addEventListener('resize', onResize, false)
-
-      renderer.autoClear = true
-
-      /**
-       * This can be tested with document.getElementById('engine-renderer-canvas').getContext('webgl2').getExtension('WEBGL_lose_context').loseContext();
-       */
-      rendererComponent.webGLLostContext.set(context.getExtension('WEBGL_lose_context'))
-
-      if (!rendererComponent.webGLLostContext.value) {
-        console.warn('Browser does not support `WEBGL_lose_context` extension')
-      }
-
-      const handleWebGLContextLost = (e) => {
-        console.log('Browser lost the context.', e, rendererComponent.webGLLostContext.value)
-        e.preventDefault()
-        rendererComponent.needsResize.set(false)
-        setTimeout(() => {
-          rendererComponent.webGLLostContext.get(NO_PROXY)!.restoreContext()
-        }, 1)
-      }
-
-      /** @todo this seems unnecessary, since threejs recovers internally */
-      // const handleWebGLContextRestore = (e) => {
-      //   const canvas = rendererComponent.canvas.value as HTMLCanvasElement
-      //   canvas.removeEventListener('webglcontextlost', handleWebGLContextLost)
-      //   canvas.removeEventListener('webglcontextrestored', handleWebGLContextRestore)
-      //   const context = rendererComponent.supportWebGL2.value
-      //     ? canvas.getContext('webgl2')!
-      //     : canvas.getContext('webgl')!
-      //   rendererComponent.renderContext.set(context)
-      //   rendererComponent.needsResize.set(true)
-      //   console.log("Browser's context is restored.", e)
-      // }
-
-      canvas.addEventListener('webglcontextlost', handleWebGLContextLost)
-
-      return () => {
-        canvas.removeEventListener('resize', onResize, false)
-        window.removeEventListener('resize', onResize, false)
-
-        canvas.removeEventListener('webglcontextlost', handleWebGLContextLost)
-        // canvas.removeEventListener('webglcontextrestored', handleWebGLContextRestore)
-
-        renderer.dispose()
-        composer.dispose()
-      }
-    }, [rendererComponent.renderContext.value])
+      onResize()
+    }, [rendererComponent.device.value])
 
     return null
   }
 })
 
+const getTransformationMatrix = () => {
+  const aspect = getComponent(rendererQuery()[0], RendererComponent).aspect
+
+  const projectionMatrix = mat4.perspective((2 * Math.PI) / 5, aspect, 1, 100.0)
+  const modelViewProjectionMatrix = mat4.create()
+  const viewMatrix = mat4.identity()
+  mat4.translate(viewMatrix, vec3.fromValues(0, 0, -4), viewMatrix)
+  const now = Date.now() / 1000
+  mat4.rotate(viewMatrix, vec3.fromValues(Math.sin(now), Math.cos(now), 0), 1, viewMatrix)
+
+  mat4.multiply(projectionMatrix, viewMatrix, modelViewProjectionMatrix)
+
+  return modelViewProjectionMatrix
+}
 /**
  * Executes the system. Called each frame by default from the Engine.instance.
  * @param delta Time since last frame.
@@ -306,52 +387,40 @@ export const render = (
   delta: number,
   effectComposer = true
 ) => {
-  const xrFrame = getState(XRState).xrFrame
+  navigator.gpu.getPreferredCanvasFormat()
 
   const canvasParent = renderer.canvas!.parentElement
   if (!canvasParent) return
 
   const state = getState(RendererState)
 
-  if (renderer.needsResize) {
-    const curPixelRatio = renderer.renderer!.getPixelRatio()
-    const scaledPixelRatio = window.devicePixelRatio * state.renderScale
+  const device = renderer.device! as GPUDevice
+  const uniformBuffer = renderer.uniformBuffer!
+  const renderPassDescriptor = renderer.renderPassDescriptor!
+  const pipeline = renderer.pipeline!
+  const uniformBindGroup = renderer.uniformBindGroup!
 
-    if (curPixelRatio !== scaledPixelRatio) renderer.renderer!.setPixelRatio(scaledPixelRatio)
+  const transformationMatrix = getTransformationMatrix()
+  device.queue.writeBuffer(
+    uniformBuffer,
+    0,
+    transformationMatrix.buffer,
+    transformationMatrix.byteOffset,
+    transformationMatrix.byteLength
+  )
+  renderPassDescriptor.colorAttachments[0].view = renderer
+    .canvas!.getContext('webgpu')!
+    .getCurrentTexture()
+    .createView()
 
-    const width = canvasParent.clientWidth
-    const height = canvasParent.clientHeight
-
-    if (camera.isPerspectiveCamera) {
-      camera.aspect = width / height
-      camera.updateProjectionMatrix()
-    }
-
-    state.useShadows && renderer.csm?.updateFrustums()
-
-    if (renderer.effectComposer) {
-      renderer.effectComposer.setSize(width, height, true)
-    } else {
-      renderer.renderer!.setSize(width, height, true)
-    }
-
-    renderer.needsResize = false
-  }
-
-  RendererComponent.activeRender = true
-
-  /** Postprocessing does not support multipass yet, so just use basic renderer when in VR */
-  if (xrFrame || !effectComposer || !renderer.effectComposer) {
-    for (const c of camera.cameras) c.layers.mask = camera.layers.mask
-    renderer.renderer!.clear()
-    renderer.renderer!.render(scene, camera)
-  } else {
-    renderer.effectComposer.setMainScene(scene)
-    renderer.effectComposer.setMainCamera(camera)
-    renderer.effectComposer.render(delta)
-  }
-
-  RendererComponent.activeRender = false
+  const commandEncoder = device.createCommandEncoder()
+  const passEncoder = commandEncoder.beginRenderPass(renderPassDescriptor)
+  passEncoder.setPipeline(pipeline)
+  passEncoder.setBindGroup(0, uniformBindGroup)
+  passEncoder.setVertexBuffer(0, renderer.verticesBuffer!)
+  passEncoder.draw(cubeVertexCount)
+  passEncoder.end()
+  device.queue.submit([commandEncoder.finish()])
 }
 
 export const RenderSettingsState = defineState({
@@ -413,7 +482,6 @@ const execute = () => {
     _scene.environment = environment
 
     _scene.fog = fog
-
     render(renderer, _scene, camera, deltaSeconds)
   }
   onRenderEnd()

@@ -23,6 +23,4 @@ All portions of the code written by the Infinite Reality Engine team are Copyrig
 Infinite Reality Engine. All Rights Reserved.
 */
 
-import { XRUISystem } from './systems/XRUISystem'
-
-export { XRUISystem }
+// export { XRUISystem }

@@ -356,9 +356,9 @@ const Reactor = () => {
 export const LoadingUISystem = defineSystem({
   uuid: 'ee.client.LoadingUISystem',
   insert: { before: TransformDirtyUpdateSystem },
-  execute,
-  reactor: () => {
-    if (!useMutableState(EngineState).viewerEntity.value) return null
-    return <Reactor />
-  }
+  execute
+  // reactor: () => {
+  //   if (!useMutableState(EngineState).viewerEntity.value) return null
+  //   return <Reactor />
+  // }
 })

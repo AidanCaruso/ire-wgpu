@@ -39,7 +39,6 @@ import { setObjectLayers } from './renderer/components/ObjectLayerComponent'
 import { SceneComponent } from './renderer/components/SceneComponents'
 import { VisibleComponent } from './renderer/components/VisibleComponent'
 import { ObjectLayers } from './renderer/constants/ObjectLayers'
-import { PerformanceManager } from './renderer/PerformanceState'
 import { RendererComponent } from './renderer/WebGLRendererSystem'
 import { EntityTreeComponent } from './transform/components/EntityTree'
 import { TransformComponent } from './transform/components/TransformComponent'
@@ -64,7 +63,7 @@ export const initializeSpatialViewer = (canvas?: HTMLCanvasElement) => {
 
   if (canvas) {
     setComponent(viewerEntity, RendererComponent, { canvas, scenes: [viewerEntity] })
-    PerformanceManager.buildPerformanceState(getComponent(viewerEntity, RendererComponent))
+    //PerformanceManager.buildPerformanceState(getComponent(viewerEntity, RendererComponent))
   }
 
   getMutableState(EngineState).merge({

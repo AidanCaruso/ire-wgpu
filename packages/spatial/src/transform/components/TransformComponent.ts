@@ -37,10 +37,10 @@ import { useImmediateEffect } from '@ir-engine/hyperflux'
 import { EntityTreeComponent, getAncestorWithComponents } from '@ir-engine/spatial/src/transform/components/EntityTree'
 
 import { ECSSchema } from '@ir-engine/ecs/src/schemas/ECSSchemas'
+import { mat4 } from 'wgpu-matrix'
 import { isZero } from '../../common/functions/MathFunctions'
 import { QuaternionProxyDirty, Vec3ProxyDirty } from '../../common/proxies/createThreejsProxy'
 import { SceneComponent } from '../../renderer/components/SceneComponents'
-
 export type TransformComponentType = {
   position: Vector3
   rotation: Quaternion
@@ -62,6 +62,14 @@ export const TransformECS = {
   // matrixWorld: ECSSchema.Mat4
 }
 
+// export const wgpuTransformComponent = defineComponent({
+//   name: 'wgpuTransformComponent',
+//   jsonID: 'wgpu_transform',
+//   schema: S.Object({
+
+//   })
+// })
+
 export const TransformComponent = defineComponent({
   name: 'TransformComponent',
   jsonID: 'EE_transform',
@@ -75,7 +83,8 @@ export const TransformComponent = defineComponent({
       rotation: QuaternionProxyDirty(initial.rotation, entity, dirtyTransforms),
       scale: Vec3ProxyDirty(initial.scale, entity, dirtyTransforms, { x: 1, y: 1, z: 1 }),
       matrix: new Matrix4(),
-      matrixWorld: new Matrix4()
+      matrixWorld: new Matrix4(),
+      mat: mat4.create()
     } as TransformComponentType
     return component
   },
@@ -241,8 +250,8 @@ export const TransformComponent = defineComponent({
     const parentEntity = getComponent(entity, EntityTreeComponent)?.parentEntity
     if (parentEntity) {
       const parentTransform = getComponent(parentEntity, TransformComponent)
-      mat4.copy(parentTransform.matrixWorld).invert()
-      transform.matrix.multiplyMatrices(mat4, transform.matrixWorld)
+      _mat4.copy(parentTransform.matrixWorld).invert()
+      transform.matrix.multiplyMatrices(_mat4, transform.matrixWorld)
     } else {
       transform.matrix.copy(transform.matrixWorld)
     }
@@ -333,7 +342,7 @@ export const TransformComponent = defineComponent({
 const vec3 = new Vector3()
 const vec3_2 = new Vector3()
 const quat = new Quaternion()
-const mat4 = new Matrix4()
+const _mat4 = new Matrix4()
 
 const _v1 = new Vector3()
 const _m1 = new Matrix4()

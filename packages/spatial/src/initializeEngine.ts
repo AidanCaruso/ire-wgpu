@@ -30,7 +30,7 @@ import { EntityUUID, UndefinedEntity } from '@ir-engine/ecs/src/Entity'
 import { getMutableState, getState } from '@ir-engine/hyperflux'
 
 import { useEffect } from 'react'
-import { CameraComponent } from './camera/components/CameraComponent'
+import { CameraComponent, wgpuCameraComponent } from './camera/components/CameraComponent'
 import { NameComponent } from './common/NameComponent'
 import { EngineState } from './EngineState'
 import { InputComponent } from './input/components/InputComponent'
@@ -48,6 +48,7 @@ export const initializeSpatialViewer = (canvas?: HTMLCanvasElement) => {
   setComponent(viewerEntity, NameComponent, 'viewer')
   setComponent(viewerEntity, UUIDComponent, 'ee.viewer' as EntityUUID)
   setComponent(viewerEntity, CameraComponent)
+  setComponent(viewerEntity, wgpuCameraComponent)
   setComponent(viewerEntity, VisibleComponent, true)
   setComponent(viewerEntity, EntityTreeComponent, { parentEntity: UndefinedEntity })
   setComponent(viewerEntity, InputComponent)

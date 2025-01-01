@@ -43,9 +43,10 @@ import {
 } from '@ir-engine/ecs'
 import { S } from '@ir-engine/ecs/src/schemas/JSONSchemas'
 import { defineState, getMutableState, getState, NO_PROXY, none, State, useMutableState } from '@ir-engine/hyperflux'
+import { TransformComponent } from '@ir-engine/spatial/src/transform/components/TransformComponent'
 import { Effect, EffectComposer, EffectPass, OutlineEffect } from 'postprocessing'
 import { mat4, vec3 } from 'wgpu-matrix'
-import { CameraComponent } from '../camera/components/CameraComponent'
+import { CameraComponent, wgpuCameraComponent } from '../camera/components/CameraComponent'
 import {
   cubePositionOffset,
   cubeUVOffset,
@@ -362,7 +363,7 @@ export const RendererComponent = defineComponent({
   }
 })
 
-const getTransformationMatrix = () => {
+const rotateCube = () => {
   const aspect = getComponent(rendererQuery()[0], RendererComponent).aspect
 
   const projectionMatrix = mat4.perspective((2 * Math.PI) / 5, aspect, 1, 100.0)
@@ -370,7 +371,7 @@ const getTransformationMatrix = () => {
   const viewMatrix = mat4.identity()
   mat4.translate(viewMatrix, vec3.fromValues(0, 0, -4), viewMatrix)
   const now = Date.now() / 1000
-  mat4.rotate(viewMatrix, vec3.fromValues(Math.sin(now), Math.cos(now), 0), 1, viewMatrix)
+  //mat4.rotate(viewMatrix, vec3.fromValues(Math.sin(now), Math.cos(now), 0), 1, viewMatrix)
 
   mat4.multiply(projectionMatrix, viewMatrix, modelViewProjectionMatrix)
 
@@ -383,7 +384,7 @@ const getTransformationMatrix = () => {
 export const render = (
   renderer: ComponentType<typeof RendererComponent>,
   scene: Scene,
-  camera: ArrayCamera,
+  camera: Entity,
   delta: number,
   effectComposer = true
 ) => {
@@ -400,13 +401,17 @@ export const render = (
   const pipeline = renderer.pipeline!
   const uniformBindGroup = renderer.uniformBindGroup!
 
-  const transformationMatrix = getTransformationMatrix()
+  const projectionMatrix = getComponent(camera, wgpuCameraComponent).projectionMatrix
+  projectionMatrix.set(mat4.perspective((2 * Math.PI) / 5, renderer.aspect, 1, 100.0))
+  const position = getComponent(camera, TransformComponent).position
+  mat4.translate(projectionMatrix, vec3.fromValues(position.x, position.y, position.z), projectionMatrix)
+  rotateCube()
   device.queue.writeBuffer(
     uniformBuffer,
     0,
-    transformationMatrix.buffer,
-    transformationMatrix.byteOffset,
-    transformationMatrix.byteLength
+    projectionMatrix.buffer,
+    projectionMatrix.byteOffset,
+    projectionMatrix.byteLength
   )
   renderPassDescriptor.colorAttachments[0].view = renderer
     .canvas!.getContext('webgpu')!
@@ -482,7 +487,7 @@ const execute = () => {
     _scene.environment = environment
 
     _scene.fog = fog
-    render(renderer, _scene, camera, deltaSeconds)
+    render(renderer, _scene, entity, deltaSeconds)
   }
   onRenderEnd()
 }

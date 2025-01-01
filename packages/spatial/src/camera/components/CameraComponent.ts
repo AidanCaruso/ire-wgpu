@@ -29,13 +29,25 @@ import { useEntityContext } from '@ir-engine/ecs'
 import { defineComponent, useComponent } from '@ir-engine/ecs/src/ComponentFunctions'
 import { S } from '@ir-engine/ecs/src/schemas/JSONSchemas'
 import { useImmediateEffect } from '@ir-engine/hyperflux'
+import { Mat4, mat4 } from 'wgpu-matrix'
 import { addObjectToGroup, removeObjectFromGroup } from '../../renderer/components/GroupComponent'
+import { T } from '../../schema/schemaFunctions'
+
+export const wgpuCameraComponent = defineComponent({
+  name: 'wgpuCameraComponent',
+  jsonID: 'wgpu_camera',
+  schema: S.Object({
+    projectionMatrix: T.wgpuMat4(mat4.perspective((2 * Math.PI) / 5, 1, 1, 100.0) as Mat4)
+  })
+})
 
 export const CameraComponent = defineComponent({
   name: 'CameraComponent',
   jsonID: 'EE_camera',
 
   schema: S.Object({
+    projectionMatrix: T.wgpuMat4(mat4.perspective((2 * Math.PI) / 5, 1, 1, 100.0) as Mat4),
+    //-------------------------------------
     fov: S.Number(60),
     aspect: S.Number(1),
     near: S.Number(0.1),

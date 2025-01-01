@@ -28,6 +28,8 @@ import { Box3, Color, ColorRepresentation, Matrix4, Quaternion, Vector2, Vector3
 import { Options, TProperties } from '@ir-engine/ecs/src/schemas/JSONSchemaTypes'
 import { S } from '@ir-engine/ecs/src/schemas/JSONSchemas'
 
+import { Mat4, mat4 } from 'wgpu-matrix'
+
 const isColorObj = (color?: ColorRepresentation): color is Color => {
   return color !== undefined && (color as Color).r !== undefined
 }
@@ -106,6 +108,25 @@ export const T = {
         deserialize: (curr, value) => curr.copy(value),
         ...options,
         id: 'Mat4'
+      }
+    ),
+
+  wgpuMat4: (init = mat4.create(), options?: Options<Mat4>) =>
+    S.SerializedClass(
+      () => init,
+      {
+        elements: S.Array(S.Number(), undefined, {
+          maxItems: 16,
+          minItems: 16
+        })
+      },
+      {
+        deserialize: (curr, value) => {
+          curr.set(value)
+          return curr
+        },
+        ...options,
+        id: 'wgpuMat4'
       }
     ),
 

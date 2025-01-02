@@ -89,7 +89,7 @@ export const LoadingUISystemState = defineState({
       },
       meshEntity: UndefinedEntity,
       transition,
-      ready: false
+      ready: true //false
     }
   },
 

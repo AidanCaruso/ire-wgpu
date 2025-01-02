@@ -23,14 +23,27 @@ All portions of the code written by the Infinite Reality Engine team are Copyrig
 Infinite Reality Engine. All Rights Reserved.
 */
 
-import { useLayoutEffect } from 'react'
-import { MeshStandardMaterial } from 'three'
+import { useEffect } from 'react'
 
-import { defineComponent, useComponent } from '@ir-engine/ecs/src/ComponentFunctions'
+import {
+  defineComponent,
+  getComponent,
+  setComponent,
+  useOptionalComponent
+} from '@ir-engine/ecs/src/ComponentFunctions'
 import { useEntityContext } from '@ir-engine/ecs/src/EntityFunctions'
 import { S } from '@ir-engine/ecs/src/schemas/JSONSchemas'
+import { useMutableState } from '@ir-engine/hyperflux'
+import { EngineState } from '@ir-engine/spatial/src/EngineState'
 import { Geometry } from '@ir-engine/spatial/src/common/constants/Geometry'
-import { useMeshComponent } from '@ir-engine/spatial/src/renderer/components/MeshComponent'
+import { cubeVertexArray } from '@ir-engine/spatial/src/common/primitives/cube'
+import { createSphereVertexArray } from '@ir-engine/spatial/src/common/primitives/sphere'
+import { RendererComponent, uniformBufferSize } from '@ir-engine/spatial/src/renderer/WebGLRendererSystem'
+import {
+  UniformBindGroupComponent,
+  UniformBufferComponent,
+  VertexBufferComponent
+} from '@ir-engine/spatial/src/transform/components/UniformBindGroupComponent'
 import { GeometryTypeEnum, GeometryTypeToFactory } from '../constants/GeometryTypeEnum'
 
 const createGeometry = (geometryType: GeometryTypeEnum, geometryParams: Record<string, any>): Geometry => {
@@ -50,16 +63,65 @@ export const PrimitiveGeometryComponent = defineComponent({
 
   reactor: () => {
     const entity = useEntityContext()
-    const geometryComponent = useComponent(entity, PrimitiveGeometryComponent)
-    const mesh = useMeshComponent(
-      entity,
-      () => createGeometry(geometryComponent.geometryType.value, geometryComponent.geometryParams.value),
-      () => new MeshStandardMaterial()
-    )
+    const viewer = useMutableState(EngineState).viewerEntity
+    const renderer = useOptionalComponent(viewer.value, RendererComponent)
 
-    useLayoutEffect(() => {
-      mesh.geometry.set(createGeometry(geometryComponent.geometryType.value, geometryComponent.geometryParams.value))
-    }, [geometryComponent.geometryType, geometryComponent.geometryParams])
+    useEffect(() => {
+      if (!renderer?.pipeline.value) return
+      // For now let's just pretend all primitive geometry are spheres ;)
+      // And no, this is not how it should be done AT ALL, but it's a start
+      const sphereVertices = createSphereVertexArray(8, 8)
+      console.log(cubeVertexArray)
+      console.log(sphereVertices)
+      const device = renderer.device.value!
+      setComponent(entity, VertexBufferComponent, {
+        buffer: device.createBuffer({
+          size: sphereVertices.byteLength,
+          usage: GPUBufferUsage.VERTEX,
+          mappedAtCreation: true
+        }),
+        vertexLength: sphereVertices.length / 10
+      })
+      const vertexBuffer = getComponent(entity, VertexBufferComponent).buffer
+      new Float32Array(vertexBuffer.getMappedRange()).set(sphereVertices)
+
+      vertexBuffer.unmap()
+
+      setComponent(
+        entity,
+        UniformBufferComponent,
+        device.createBuffer({
+          size: uniformBufferSize,
+          usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+        })
+      )
+      setComponent(entity, UniformBindGroupComponent, {
+        bindGroup: device.createBindGroup({
+          layout: renderer.pipeline.value!.getBindGroupLayout(0),
+          entries: [
+            {
+              binding: 0,
+              resource: {
+                buffer: getComponent(entity, UniformBufferComponent)
+              }
+            }
+          ]
+        }),
+        offset: 0
+      })
+    }, [renderer?.pipeline])
+
+    // const entity = useEntityContext()
+    // const geometryComponent = useComponent(entity, PrimitiveGeometryComponent)
+    // const mesh = useMeshComponent(
+    //   entity,
+    //   () => createGeometry(geometryComponent.geometryType.value, geometryComponent.geometryParams.value),
+    //   () => new MeshStandardMaterial()
+    // )
+
+    // useLayoutEffect(() => {
+    //   mesh.geometry.set(createGeometry(geometryComponent.geometryType.value, geometryComponent.geometryParams.value))
+    // }, [geometryComponent.geometryType, geometryComponent.geometryParams])
 
     return null
   }

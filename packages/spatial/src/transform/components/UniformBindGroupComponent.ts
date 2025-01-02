@@ -33,3 +33,18 @@ export const UniformBindGroupComponent = defineComponent({
     offset: S.Number(0)
   })
 })
+
+export const VertexBufferComponent = defineComponent({
+  name: 'VertexBufferComponent',
+
+  schema: S.Object({
+    buffer: S.Type<GPUBuffer>(),
+    vertexLength: S.Number(0)
+  })
+})
+
+export const UniformBufferComponent = defineComponent({
+  name: 'UniformBufferComponent',
+
+  schema: S.Type<GPUBuffer>()
+})

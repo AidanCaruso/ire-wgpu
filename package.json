@@ -142,7 +142,8 @@
     "stylelint-config-standard-scss": "^7.0.1",
     "stylelint-scss": "^4.5.0",
     "supertest": "6.3.3",
-    "vitest": "2.1.1"
+    "vitest": "2.1.1",
+    "@webgpu/types": "^0.1.52"
   },
   "dependencies": {
     "@aws-sdk/client-ecr": "^3.319.0",
@@ -165,6 +166,7 @@
     "react-ga4": "^2.1.0",
     "three": "0.158.0",
     "ts-node": "10.9.2",
-    "typescript": "5.4.5"
+    "typescript": "5.4.5",
+    "wgpu-matrix": "github:AidanCaruso/wgpu-matrix-cjs"
   }
 }

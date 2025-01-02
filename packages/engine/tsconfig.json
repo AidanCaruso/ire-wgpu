@@ -24,7 +24,7 @@
     "allowSyntheticDefaultImports": true,
     "emitDecoratorMetadata": true,
     "declaration": false,
-    "types": ["@types/node"]
+    "types": ["@types/node","@webgpu/types"]
   },
   "include": ["../../__global.d.ts", "./src", "./index.ts"]
 }

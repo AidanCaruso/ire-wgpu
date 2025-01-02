@@ -35,6 +35,7 @@ import {
   ECSState,
   Entity,
   getComponent,
+  getOptionalComponent,
   hasComponent,
   PresentationSystemGroup,
   QueryReactor,
@@ -58,7 +59,11 @@ import {
 import { basicFrag, basicVert } from '../common/shaders/basic'
 import { ColliderComponent } from '../physics/components/ColliderComponent'
 import { getNestedChildren } from '../transform/components/EntityTree'
-import { UniformBindGroupComponent } from '../transform/components/UniformBindGroupComponent'
+import {
+  UniformBindGroupComponent,
+  UniformBufferComponent,
+  VertexBufferComponent
+} from '../transform/components/UniformBindGroupComponent'
 import { WebXRManager } from '../xr/WebXRManager'
 import { XRState } from '../xr/XRState'
 import { GroupComponent } from './components/GroupComponent'
@@ -98,15 +103,17 @@ export const RendererComponent = defineComponent({
       renderContext: S.Nullable(S.Type<GPUCanvasContext>()),
       effects: S.Record(S.String(), EffectSchema),
 
+      // ----webgpu----
       canvas: S.Nullable(S.Type<HTMLCanvasElement>()),
 
+      currentGroupOffset: S.Number(0),
       device: S.Nullable(S.Type<GPUDevice>()),
       pipeline: S.Nullable(S.Type<GPURenderPipeline>()),
       depthTexture: S.Nullable(S.Type<GPUTexture>()),
       uniformBuffer: S.Nullable(S.Type<GPUBuffer>()),
       renderPassDescriptor: S.Nullable(S.Type<GPURenderPassDescriptor>()),
-      verticesBuffer: S.Nullable(S.Type<GPUBuffer>()),
       aspect: S.Number(1),
+      // ----end webgpu----
 
       renderer: S.Nullable(S.Type<WebGLRenderer>()),
       effectComposer: S.Nullable(S.Type<EffectComposer>()),
@@ -151,8 +158,26 @@ export const RendererComponent = defineComponent({
     useEffect(() => {
       if (!rendererComponent.device.value) return
       const device = rendererComponent.device.value as GPUDevice
+
+      const bindGroupLayout = device.createBindGroupLayout({
+        entries: [
+          {
+            binding: 0,
+            visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
+            buffer: {
+              type: 'uniform'
+            }
+          }
+        ]
+      })
+
+      const pipelineLayout = device.createPipelineLayout({
+        bindGroupLayouts: [bindGroupLayout]
+      })
+
       const pipeline = device.createRenderPipeline({
-        layout: 'auto',
+        //stop using auto
+        layout: pipelineLayout,
         vertex: {
           module: device.createShaderModule({
             code: basicVert
@@ -245,16 +270,6 @@ export const RendererComponent = defineComponent({
           depthStoreOp: 'store'
         }
       })
-
-      rendererComponent.verticesBuffer.set(
-        device.createBuffer({
-          size: cubeVertexArray.byteLength,
-          usage: GPUBufferUsage.VERTEX,
-          mappedAtCreation: true
-        })
-      )
-      new Float32Array(rendererComponent.verticesBuffer.value!.getMappedRange()).set(cubeVertexArray)
-      rendererComponent.verticesBuffer.value!.unmap()
 
       rendererComponent.aspect.set(canvas.clientWidth / canvas.clientHeight)
     }, [rendererComponent.device])
@@ -357,6 +372,7 @@ export const RendererComponent = defineComponent({
  * @param delta Time since last frame.
  */
 const bindGroupQuery = defineQuery([UniformBindGroupComponent])
+
 export const render = (renderer: ComponentType<typeof RendererComponent>, camera: Entity, delta: number) => {
   navigator.gpu.getPreferredCanvasFormat()
 
@@ -364,11 +380,11 @@ export const render = (renderer: ComponentType<typeof RendererComponent>, camera
   if (!canvasParent) return
 
   const device = renderer.device! as GPUDevice
-  const uniformBuffer = renderer.uniformBuffer!
   const renderPassDescriptor = renderer.renderPassDescriptor!
   const pipeline = renderer.pipeline!
 
-  const projectionMatrix = getComponent(camera, wgpuCameraComponent).projectionMatrix
+  const projectionMatrix = getOptionalComponent(camera, wgpuCameraComponent)?.projectionMatrix
+  if (!projectionMatrix) return
   projectionMatrix.set(mat4.perspective(Math.PI * 0.5, renderer.aspect, 0.1, 1000.0))
   const rotation = getComponent(camera, TransformComponent).rotation
   const quaternion = quat.create(rotation.x, rotation.y, rotation.z, rotation.w)
@@ -380,20 +396,6 @@ export const render = (renderer: ComponentType<typeof RendererComponent>, camera
   const position = getComponent(camera, TransformComponent).position
   mat4.translate(projectionMatrix, vec3.fromValues(-position.x, -position.y, -position.z), projectionMatrix)
 
-  for (const entity of bindGroupQuery()) {
-    const modelViewProjection = mat4.create()
-    modelViewProjection.set(projectionMatrix)
-    const worldMatrix = new Float32Array(getComponent(entity, TransformComponent).matrixWorld.elements)
-    mat4.mul(modelViewProjection, worldMatrix, modelViewProjection)
-    device.queue.writeBuffer(
-      uniformBuffer,
-      getComponent(entity, UniformBindGroupComponent).offset,
-      modelViewProjection.buffer,
-      modelViewProjection.byteOffset,
-      modelViewProjection.byteLength
-    )
-  }
-
   renderPassDescriptor.colorAttachments[0].view = renderer
     .canvas!.getContext('webgpu')!
     .getCurrentTexture()
@@ -402,13 +404,26 @@ export const render = (renderer: ComponentType<typeof RendererComponent>, camera
   const commandEncoder = device.createCommandEncoder()
   const passEncoder = commandEncoder.beginRenderPass(renderPassDescriptor)
   passEncoder.setPipeline(pipeline)
-  passEncoder.setVertexBuffer(0, renderer.verticesBuffer!)
 
   for (const entity of bindGroupQuery()) {
+    const modelViewProjection = mat4.create()
+    modelViewProjection.set(projectionMatrix)
+    const worldMatrix = new Float32Array(getComponent(entity, TransformComponent).matrixWorld.elements)
+    mat4.mul(modelViewProjection, worldMatrix, modelViewProjection)
+    device.queue.writeBuffer(
+      getComponent(entity, UniformBufferComponent),
+      0,
+      modelViewProjection.buffer,
+      modelViewProjection.byteOffset,
+      modelViewProjection.byteLength
+    )
+    const vertexBuffer = getComponent(entity, VertexBufferComponent)
+    passEncoder.setVertexBuffer(0, vertexBuffer.buffer)
     const uniformBindGroup = getComponent(entity, UniformBindGroupComponent)
     passEncoder.setBindGroup(0, uniformBindGroup.bindGroup)
-    passEncoder.draw(cubeVertexCount)
+    passEncoder.draw(vertexBuffer.vertexLength)
   }
+
   passEncoder.end()
   device.queue.submit([commandEncoder.finish()])
 }
@@ -452,11 +467,6 @@ export const getSceneParameters = (entities: Entity[]) => {
 
 const colliderQuery = defineQuery([ColliderComponent])
 
-//move this to component
-let currentGroupOffset = 0
-const offset = 256
-const matrixSize = 4 * 16
-
 const execute = () => {
   const deltaSeconds = getState(ECSState).deltaSeconds
 
@@ -480,9 +490,31 @@ const execute = () => {
 
     _scene.fog = fog
 
-    //this is just for testing purposes
+    // this lives here for testing purposes
+    // @todo move this collider vis into debug reactor and make toggleable
     for (const entity of colliderQuery.enter()) {
-      const collider = getComponent(entity, ColliderComponent)
+      //bad
+      const device = renderer.device!
+      setComponent(entity, VertexBufferComponent, {
+        buffer: device.createBuffer({
+          size: cubeVertexArray.byteLength,
+          usage: GPUBufferUsage.VERTEX,
+          mappedAtCreation: true
+        }),
+        vertexLength: cubeVertexCount
+      })
+      const vertexBuffer = getComponent(entity, VertexBufferComponent).buffer
+      new Float32Array(vertexBuffer.getMappedRange()).set(cubeVertexArray)
+      vertexBuffer.unmap()
+
+      setComponent(
+        entity,
+        UniformBufferComponent,
+        device.createBuffer({
+          size: uniformBufferSize,
+          usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+        })
+      )
       setComponent(entity, UniformBindGroupComponent, {
         bindGroup: renderer.device!.createBindGroup({
           layout: renderer.pipeline!.getBindGroupLayout(0),
@@ -490,16 +522,13 @@ const execute = () => {
             {
               binding: 0,
               resource: {
-                buffer: renderer.uniformBuffer as GPUBuffer,
-                size: matrixSize,
-                offset: currentGroupOffset
+                buffer: getComponent(entity, UniformBufferComponent)
               }
             }
           ]
         }),
-        offset: currentGroupOffset
+        offset: 0
       })
-      currentGroupOffset += offset
     }
 
     render(renderer, entity, deltaSeconds)

@@ -35,6 +35,7 @@ import {
   ECSState,
   Entity,
   getComponent,
+  getMutableComponent,
   getOptionalComponent,
   hasComponent,
   PresentationSystemGroup,
@@ -73,7 +74,6 @@ import { ObjectLayers } from './constants/ObjectLayers'
 import { RenderModes } from './constants/RenderModes'
 import { CSM } from './csm/CSM'
 import CSMHelper from './csm/CSMHelper'
-import { changeRenderMode } from './functions/changeRenderMode'
 import { HighlightState } from './HighlightState'
 import { PerformanceManager, PerformanceState } from './PerformanceState'
 import { RendererState } from './RendererState'
@@ -341,19 +341,7 @@ export const RendererComponent = defineComponent({
       const canvas = rendererComponent.canvas.get(NO_PROXY) as HTMLCanvasElement
 
       const onResize = () => {
-        canvas.width = canvas.clientWidth
-        canvas.height = canvas.clientHeight
-        rendererComponent.aspect.set(canvas.clientWidth / canvas.clientHeight)
-        rendererComponent.depthTexture.value?.destroy()
-        rendererComponent.depthTexture.set(
-          rendererComponent.device.value!.createTexture({
-            size: [canvas.width, canvas.height],
-            format: 'depth24plus',
-            usage: GPUTextureUsage.RENDER_ATTACHMENT
-          })
-        )
-        ;(rendererComponent.renderPassDescriptor.get(NO_PROXY)!.depthStencilAttachment!.view as GPUTextureView) =
-          rendererComponent.depthTexture.get(NO_PROXY)!.createView()
+        rendererComponent.needsResize.set(true)
       }
 
       // // https://stackoverflow.com/questions/48124372/pointermove-event-not-working-with-touch-why-not
@@ -376,12 +364,11 @@ const bindGroupQuery = defineQuery([UniformBindGroupComponent])
 export const render = (renderer: ComponentType<typeof RendererComponent>, camera: Entity, delta: number) => {
   navigator.gpu.getPreferredCanvasFormat()
 
-  const canvasParent = renderer.canvas!.parentElement
-  if (!canvasParent) return
+  const device = renderer.device as GPUDevice
+  const renderPassDescriptor = renderer.renderPassDescriptor
+  const pipeline = renderer.pipeline
 
-  const device = renderer.device! as GPUDevice
-  const renderPassDescriptor = renderer.renderPassDescriptor!
-  const pipeline = renderer.pipeline!
+  if (!renderPassDescriptor || !pipeline || !device) return
 
   const projectionMatrix = getOptionalComponent(camera, wgpuCameraComponent)?.projectionMatrix
   if (!projectionMatrix) return
@@ -531,6 +518,28 @@ const execute = () => {
       })
     }
 
+    const canvasParent = renderer.canvas?.parentElement
+    if (!canvasParent) return
+
+    if (renderer.needsResize) {
+      const rendererComponent = getMutableComponent(entity, RendererComponent)
+      renderer.canvas!.width = canvasParent.clientWidth
+      renderer.canvas!.height = canvasParent.clientHeight
+      rendererComponent.aspect.set(canvasParent.clientWidth / canvasParent.clientHeight)
+      renderer.depthTexture?.destroy()
+      rendererComponent.depthTexture.set(
+        renderer.device!.createTexture({
+          size: [renderer.canvas!.width, renderer.canvas!.height],
+          format: 'depth24plus',
+          usage: GPUTextureUsage.RENDER_ATTACHMENT
+        })
+      )
+      ;(rendererComponent.renderPassDescriptor.get(NO_PROXY)!.depthStencilAttachment!.view as GPUTextureView) =
+        rendererComponent.depthTexture.get(NO_PROXY)!.createView()
+
+      rendererComponent.needsResize.set(false)
+    }
+
     render(renderer, entity, deltaSeconds)
   }
   onRenderEnd()
@@ -550,15 +559,6 @@ const rendererReactor = () => {
       cpuTier: qualityLevel
     } as any)
   }, [engineRendererSettings.qualityLevel, engineRendererSettings.automatic])
-
-  useEffect(() => {
-    renderer.renderer.value!.setPixelRatio(window.devicePixelRatio * engineRendererSettings.renderScale.value)
-    renderer.needsResize.set(true)
-  }, [engineRendererSettings.renderScale])
-
-  useEffect(() => {
-    changeRenderMode(entity)
-  }, [engineRendererSettings.renderMode])
 
   return null
 }

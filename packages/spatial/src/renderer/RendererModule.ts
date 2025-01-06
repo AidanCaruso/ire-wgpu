@@ -29,7 +29,8 @@ import { DebugRendererSystem } from './DebugRendererSystem'
 import { LightTransformSystem } from './LightTransformSystem'
 import { RenderInfoSystem } from './RenderInfoSystem'
 import { ViewportLightingSystem } from './ViewportLightingSystem'
-import { WebGLRendererSystem } from './WebGLRendererSystem'
+//import { WebGLRendererSystem } from './WebGLRendererSystem'
+import { WgpuRendererSystem } from './WebGPURendererSystem'
 import { AmbientLightComponent } from './components/lights/AmbientLightComponent'
 import { DirectionalLightComponent } from './components/lights/DirectionalLightComponent'
 import { HemisphereLightComponent } from './components/lights/HemisphereLightComponent'
@@ -49,6 +50,7 @@ export {
   SpotLightComponent,
   TransformComponent,
   ViewportLightingSystem,
-  WebGLRendererSystem,
+  //WebGLRendererSystem,
+  WgpuRendererSystem,
   XRAnchorComponent
 }

@@ -43,7 +43,7 @@ import { getState, useImmediateEffect, useMutableState } from '@ir-engine/hyperf
 import { useEffect } from 'react'
 import { Vector3 } from 'three'
 import { NameComponent } from '../../common/NameComponent'
-import { RendererComponent } from '../../renderer/WebGLRendererSystem'
+import { WgpuRendererComponent } from '../../renderer/WebGPURendererSystem'
 import { EntityTreeComponent, useAncestorWithComponents } from '../../transform/components/EntityTree'
 import { TransformComponent } from '../../transform/components/TransformComponent'
 import { XRState } from '../../xr/XRState'
@@ -204,7 +204,7 @@ export const useXRInputSources = () => {
 export const CanvasInputReactor = () => {
   const cameraEntity = useEntityContext()
   const xrState = useMutableState(XRState)
-  const rendererComponent = useComponent(cameraEntity, RendererComponent)
+  const rendererComponent = useComponent(cameraEntity, WgpuRendererComponent)
 
   useEffect(() => {
     if (xrState.session.value) return // pointer input sources are automatically handled by webxr

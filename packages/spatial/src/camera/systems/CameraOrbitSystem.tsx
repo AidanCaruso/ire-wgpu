@@ -47,7 +47,7 @@ import { InputComponent } from '../../input/components/InputComponent'
 import { InputPointerComponent } from '../../input/components/InputPointerComponent'
 import { MouseScroll } from '../../input/state/ButtonState'
 import { InputState } from '../../input/state/InputState'
-import { RendererComponent } from '../../renderer/WebGLRendererSystem'
+import { WgpuRendererComponent } from '../../renderer/WebGPURendererSystem'
 import { TransformComponent } from '../../transform/components/TransformComponent'
 import { FlyControlComponent } from '../components/FlyControlComponent'
 const ZOOM_SPEED = 0.1
@@ -63,7 +63,7 @@ const spherical = new Spherical()
 
 // const throttleZoom = throttle(doZoom, 30, { leading: true, trailing: false })
 const orbitCameraQuery = defineQuery([
-  RendererComponent,
+  WgpuRendererComponent,
   CameraOrbitComponent,
   InputComponent,
   Not(FlyControlComponent)

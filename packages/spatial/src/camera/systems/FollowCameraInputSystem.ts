@@ -47,13 +47,13 @@ import { XRState } from '@ir-engine/spatial/src/xr/XRState'
 import { useEffect } from 'react'
 import { EngineState } from '../../EngineState'
 import { Q_Y_180 } from '../../common/constants/MathConstants'
-import { RendererComponent } from '../../renderer/WebGLRendererSystem'
+import { WgpuRendererComponent } from '../../renderer/WebGPURendererSystem'
 import { TransformComponent } from '../../transform/components/TransformComponent'
 
 // const throttleHandleCameraZoom = throttle(handleFollowCameraZoom, 30, { leading: true, trailing: false })
 
 const pointerPositionDelta = new Vector2()
-const rendererQuery = defineQuery([RendererComponent])
+const rendererQuery = defineQuery([WgpuRendererComponent])
 const epsilon = 0.001
 
 const followCameraModeCycle = [
@@ -135,7 +135,7 @@ const execute = () => {
     let { theta, phi } = getOptionalComponent(cameraEntity, TargetCameraRotationComponent) ?? follow
     let time = 0.3
 
-    const canvas = getComponent(cameraEntity, RendererComponent).canvas
+    const canvas = getComponent(cameraEntity, WgpuRendererComponent).canvas
     if (follow.pointerLock && buttons?.PrimaryClick?.pressed && document.pointerLockElement !== canvas) {
       /**
        * @todo - add support for unadjustedMovement API

@@ -28,6 +28,7 @@ import { getState, none, useMutableState } from '@ir-engine/hyperflux'
 import { EngineState } from '@ir-engine/spatial/src/EngineState'
 import { destroySpatialViewer, initializeSpatialViewer } from '@ir-engine/spatial/src/initializeEngine'
 import { RendererComponent } from '@ir-engine/spatial/src/renderer/WebGLRendererSystem'
+import { WgpuRendererComponent } from '@ir-engine/spatial/src/renderer/WebGPURendererSystem'
 import { useEffect } from 'react'
 
 export const useEngineCanvas = (ref: React.RefObject<HTMLElement>) => {
@@ -42,7 +43,11 @@ export const useEngineCanvas = (ref: React.RefObject<HTMLElement>) => {
     parent.appendChild(canvas)
 
     const observer = new ResizeObserver(() => {
-      getComponent(getState(EngineState).viewerEntity, RendererComponent).needsResize = true
+      const viewerEntity = getState(EngineState).viewerEntity
+      if (hasComponent(viewerEntity, RendererComponent))
+        getComponent(getState(EngineState).viewerEntity, RendererComponent).needsResize = true
+      if (hasComponent(viewerEntity, WgpuRendererComponent))
+        getComponent(getState(EngineState).viewerEntity, WgpuRendererComponent).needsResize = true
     })
 
     observer.observe(parent)

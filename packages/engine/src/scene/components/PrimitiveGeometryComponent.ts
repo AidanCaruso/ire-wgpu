@@ -23,12 +23,13 @@ All portions of the code written by the Infinite Reality Engine team are Copyrig
 Infinite Reality Engine. All Rights Reserved.
 */
 
-import { useEffect } from 'react'
+import { useEffect, useLayoutEffect } from 'react'
 
 import {
   defineComponent,
   getComponent,
   setComponent,
+  useComponent,
   useOptionalComponent
 } from '@ir-engine/ecs/src/ComponentFunctions'
 import { useEntityContext } from '@ir-engine/ecs/src/EntityFunctions'
@@ -38,14 +39,15 @@ import { EngineState } from '@ir-engine/spatial/src/EngineState'
 import { Geometry } from '@ir-engine/spatial/src/common/constants/Geometry'
 import { cubeVertexArray } from '@ir-engine/spatial/src/common/primitives/cube'
 import { createSphereVertexArray } from '@ir-engine/spatial/src/common/primitives/sphere'
-import { RendererComponent, uniformBufferSize } from '@ir-engine/spatial/src/renderer/WebGLRendererSystem'
+import { WgpuRendererComponent } from '@ir-engine/spatial/src/renderer/WebGPURendererSystem'
+import { useMeshComponent } from '@ir-engine/spatial/src/renderer/components/MeshComponent'
 import {
   UniformBindGroupComponent,
   UniformBufferComponent,
   VertexBufferComponent
 } from '@ir-engine/spatial/src/transform/components/UniformBindGroupComponent'
+import { MeshStandardMaterial } from 'three'
 import { GeometryTypeEnum, GeometryTypeToFactory } from '../constants/GeometryTypeEnum'
-
 const createGeometry = (geometryType: GeometryTypeEnum, geometryParams: Record<string, any>): Geometry => {
   const factory = GeometryTypeToFactory[geometryType]
   const geometry = factory(geometryParams)
@@ -64,10 +66,12 @@ export const PrimitiveGeometryComponent = defineComponent({
   reactor: () => {
     const entity = useEntityContext()
     const viewer = useMutableState(EngineState).viewerEntity
-    const renderer = useOptionalComponent(viewer.value, RendererComponent)
+    const renderer = useOptionalComponent(viewer.value, WgpuRendererComponent)
 
     useEffect(() => {
       if (!renderer?.pipeline.value) return
+
+      // -webgpu logic-
       // For now let's just pretend all primitive geometry are spheres ;)
       // And no, this is not how it should be done AT ALL, but it's a start
       const sphereVertices = createSphereVertexArray(8, 8)
@@ -91,7 +95,7 @@ export const PrimitiveGeometryComponent = defineComponent({
         entity,
         UniformBufferComponent,
         device.createBuffer({
-          size: uniformBufferSize,
+          size: 2048,
           usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
         })
       )
@@ -111,17 +115,17 @@ export const PrimitiveGeometryComponent = defineComponent({
       })
     }, [renderer?.pipeline])
 
-    // const entity = useEntityContext()
-    // const geometryComponent = useComponent(entity, PrimitiveGeometryComponent)
-    // const mesh = useMeshComponent(
-    //   entity,
-    //   () => createGeometry(geometryComponent.geometryType.value, geometryComponent.geometryParams.value),
-    //   () => new MeshStandardMaterial()
-    // )
+    // -threejs logic-
+    const geometryComponent = useComponent(entity, PrimitiveGeometryComponent)
+    const mesh = useMeshComponent(
+      entity,
+      () => createGeometry(geometryComponent.geometryType.value, geometryComponent.geometryParams.value),
+      () => new MeshStandardMaterial()
+    )
 
-    // useLayoutEffect(() => {
-    //   mesh.geometry.set(createGeometry(geometryComponent.geometryType.value, geometryComponent.geometryParams.value))
-    // }, [geometryComponent.geometryType, geometryComponent.geometryParams])
+    useLayoutEffect(() => {
+      mesh.geometry.set(createGeometry(geometryComponent.geometryType.value, geometryComponent.geometryParams.value))
+    }, [geometryComponent.geometryType, geometryComponent.geometryParams])
 
     return null
   }

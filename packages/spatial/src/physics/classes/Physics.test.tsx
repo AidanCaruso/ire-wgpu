@@ -55,17 +55,24 @@ import { TriggerComponent } from '../components/TriggerComponent'
 import { AllCollisionMask, CollisionGroups, DefaultCollisionMask } from '../enums/CollisionGroups'
 import { getInteractionGroups } from '../functions/getInteractionGroups'
 
-import { Entity, EntityUUID, SystemDefinitions, UUIDComponent, UndefinedEntity, removeEntity } from '@ir-engine/ecs'
+import {
+  Entity,
+  EntityTreeComponent,
+  EntityUUID,
+  SystemDefinitions,
+  UUIDComponent,
+  UndefinedEntity,
+  removeEntity
+} from '@ir-engine/ecs'
 import { NetworkObjectComponent } from '@ir-engine/network'
 import { act, render } from '@testing-library/react'
 import React from 'react'
-import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry'
+import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js'
 import { Epsilon, assertFloat, assertVec } from '../../../tests/util/assert'
 import { smootheLerpAlpha } from '../../common/functions/MathLerpFunctions'
 import { MeshComponent } from '../../renderer/components/MeshComponent'
 import { SceneComponent } from '../../renderer/components/SceneComponents'
 import '../../transform/TransformModule'
-import { EntityTreeComponent } from '../../transform/components/EntityTree'
 import '../PhysicsModule'
 import { PhysicsSystem } from '../systems/PhysicsSystem'
 import {

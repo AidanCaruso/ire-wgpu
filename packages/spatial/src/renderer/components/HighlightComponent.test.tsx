@@ -25,8 +25,8 @@ Ethereal Engine. All Rights Reserved.
 import { mockSpatialEngine } from '../../../tests/util/mockSpatialEngine'
 
 import {
-  Engine,
   Entity,
+  EntityTreeComponent,
   EntityUUID,
   SystemDefinitions,
   UUIDComponent,
@@ -44,17 +44,18 @@ import {
 } from '@ir-engine/ecs'
 import { getMutableState, getState } from '@ir-engine/hyperflux'
 import assert from 'assert'
+import { OutlineEffect } from 'postprocessing'
 import { BoxGeometry, MathUtils, Mesh } from 'three'
 import { afterEach, beforeEach, describe, it, vi } from 'vitest'
-import { EngineState } from '../../EngineState'
+import { ReferenceSpaceState } from '../../ReferenceSpaceState'
+import { NameComponent } from '../../common/NameComponent'
 import { destroySpatialEngine, destroySpatialViewer } from '../../initializeEngine'
-import { EntityTreeComponent } from '../../transform/components/EntityTree'
 import { TransformComponent } from '../RendererModule'
 import { RendererState } from '../RendererState'
 import { RendererComponent, WebGLRendererSystem } from '../WebGLRendererSystem'
-import { GroupComponent, addObjectToGroup } from './GroupComponent'
 import { HighlightComponent, HighlightSystem } from './HighlightComponent'
 import { MeshComponent } from './MeshComponent'
+import { GroupComponent, addObjectToGroup } from './ObjectComponent'
 import { PostProcessingComponent } from './PostProcessingComponent'
 import { SceneComponent } from './SceneComponents'
 import { VisibleComponent } from './VisibleComponent'
@@ -99,9 +100,8 @@ describe('HighlightSystem', () => {
       const result = createEntity()
       setComponent(result, HighlightComponent)
       setComponent(result, VisibleComponent)
+      setComponent(result, NameComponent, name)
       setComponent(result, MeshComponent, new Mesh(new BoxGeometry()))
-      getMutableComponent(result, MeshComponent).name.set(name)
-      setComponent(result, GroupComponent)
       setComponent(result, EntityTreeComponent)
       return {
         id: result,
@@ -119,8 +119,10 @@ describe('HighlightSystem', () => {
       const highlightSystemExecute = SystemDefinitions.get(HighlightSystem)!.execute
       // Run and Check the result
       highlightSystemExecute()
-      const result = getComponent(Engine.instance.viewerEntity, RendererComponent).effectComposer?.OutlineEffect
-        .selection
+      const result = (
+        getOptionalComponent(getState(ReferenceSpaceState).viewerEntity, RendererComponent)?.effectInstances
+          ?.OutlineEffect as OutlineEffect
+      ).selection
       const list = [...result!.values()]
       list.forEach((value, _) => assert.equal(Expected.includes(value.name), true))
     })
@@ -131,13 +133,15 @@ describe('HighlightSystem', () => {
       const entity3 = createOutlineEntity('entity3')
       const Expected = [entity1.name, entity2.name, entity3.name]
       // Sanity check before running
-      assert.equal(hasComponent(getState(EngineState).viewerEntity, RendererComponent), false)
+      assert.equal(hasComponent(getState(ReferenceSpaceState).viewerEntity, RendererComponent), false)
       // Get the system definition
       const highlightSystemExecute = SystemDefinitions.get(HighlightSystem)!.execute
       // Run and Check the result
       highlightSystemExecute()
-      const result = getOptionalComponent(getState(EngineState).viewerEntity, RendererComponent)?.effectComposer
-        ?.OutlineEffect.selection
+      const result = (
+        getOptionalComponent(getState(ReferenceSpaceState).viewerEntity, RendererComponent)?.effectInstances
+          ?.OutlineEffect as OutlineEffect
+      )?.selection
       assert.equal(result, undefined)
     })
 
@@ -162,8 +166,10 @@ describe('HighlightSystem', () => {
       const highlightSystemExecute = SystemDefinitions.get(HighlightSystem)!.execute
       // Run and Check the result
       highlightSystemExecute()
-      const result = getOptionalComponent(getState(EngineState).viewerEntity, RendererComponent)?.effectComposer
-        ?.OutlineEffect.selection
+      const result = (
+        getOptionalComponent(getState(ReferenceSpaceState).viewerEntity, RendererComponent)?.effectInstances
+          ?.OutlineEffect as OutlineEffect
+      )?.selection
       for (const obj of result!) {
         assert.notEqual(obj.entity, notQueryEntity1)
         assert.notEqual(obj.entity, notQueryEntity2)
@@ -191,8 +197,10 @@ describe('HighlightSystem', () => {
       const highlightSystemExecute = SystemDefinitions.get(HighlightSystem)!.execute
       // Run and Check the result
       highlightSystemExecute()
-      const result = getOptionalComponent(getState(EngineState).viewerEntity, RendererComponent)?.effectComposer
-        ?.OutlineEffect.selection
+      const result = (
+        getOptionalComponent(getState(ReferenceSpaceState).viewerEntity, RendererComponent)?.effectInstances
+          ?.OutlineEffect as OutlineEffect
+      )?.selection
       for (const obj of result!) {
         assert.notEqual(obj.entity, notQueryEntity1)
         assert.notEqual(obj.entity, notQueryEntity2)
@@ -220,8 +228,10 @@ describe('HighlightSystem', () => {
       const highlightSystemExecute = SystemDefinitions.get(HighlightSystem)!.execute
       // Run and Check the result
       highlightSystemExecute()
-      const result = getOptionalComponent(getState(EngineState).viewerEntity, RendererComponent)?.effectComposer
-        ?.OutlineEffect.selection
+      const result = (
+        getOptionalComponent(getState(ReferenceSpaceState).viewerEntity, RendererComponent)?.effectInstances
+          ?.OutlineEffect as OutlineEffect
+      )?.selection
       for (const obj of result!) {
         assert.notEqual(obj.entity, notQueryEntity1)
         assert.notEqual(obj.entity, notQueryEntity2)
@@ -236,7 +246,7 @@ describe('HighlightSystem', () => {
     beforeEach(() => {
       createEngine()
       mockSpatialEngine()
-      rootEntity = getState(EngineState).viewerEntity
+      rootEntity = getState(ReferenceSpaceState).viewerEntity
 
       testEntity = createEntity()
       setComponent(testEntity, UUIDComponent, MathUtils.generateUUID() as EntityUUID)

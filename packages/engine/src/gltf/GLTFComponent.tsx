@@ -57,18 +57,14 @@ import {
   useMutableState
 } from '@ir-engine/hyperflux'
 
+import { EngineState, useAncestorWithComponents, useChildrenWithComponents } from '@ir-engine/ecs'
 import { S } from '@ir-engine/ecs/src/schemas/JSONSchemas'
-import { EngineState } from '@ir-engine/spatial/src/EngineState'
-import { ShapeSchema } from '@ir-engine/spatial/src/physics/types/PhysicsTypes.ts'
+import { ShapeSchema } from '@ir-engine/spatial/src/physics/types/PhysicsTypes'
 import { MeshComponent } from '@ir-engine/spatial/src/renderer/components/MeshComponent'
 import { ObjectLayerMaskComponent } from '@ir-engine/spatial/src/renderer/components/ObjectLayerComponent'
 import { SceneComponent } from '@ir-engine/spatial/src/renderer/components/SceneComponents'
 import { ObjectLayers } from '@ir-engine/spatial/src/renderer/constants/ObjectLayers'
 import { MaterialStateComponent } from '@ir-engine/spatial/src/renderer/materials/MaterialComponent'
-import {
-  useAncestorWithComponents,
-  useChildrenWithComponents
-} from '@ir-engine/spatial/src/transform/components/EntityTree'
 import { useGLTFResource } from '../assets/functions/resourceLoaderHooks'
 import { FileLoader } from '../assets/loaders/base/FileLoader'
 import {
@@ -86,7 +82,7 @@ import { GLTFDocumentState, GLTFSnapshotAction } from './GLTFDocumentState'
 import { GLTFSourceState } from './GLTFState'
 import { gltfReplaceUUIDsReferences } from './gltfUtils'
 import { ResourcePendingComponent } from './ResourcePendingComponent'
-import { useApplyCollidersToChildMeshesEffect } from './useApplyCollidersToChildMeshesEffect.ts'
+import { useApplyCollidersToChildMeshesEffect } from './useApplyCollidersToChildMeshesEffect'
 
 type DependencyEval = {
   key: string
@@ -204,6 +200,20 @@ export const GLTFComponent = defineComponent({
     return componentDependenciesLoaded(dependencies) && progress === 100
   },
 
+  getInstanceID: (entity: Entity) => {
+    const uuid = getOptionalComponent(entity, UUIDComponent)
+    const src = getOptionalComponent(entity, GLTFComponent)?.src
+    if (!uuid || !src) return ''
+    return `${uuid}-${src}`
+  },
+
+  useInstanceID: (entity: Entity) => {
+    const uuid = useOptionalComponent(entity, UUIDComponent)?.value
+    const src = useOptionalComponent(entity, GLTFComponent)?.src.value
+    if (!uuid || !src) return ''
+    return `${uuid}-${src}`
+  },
+
   reactor: () => {
     const entity = useEntityContext()
     const gltfComponent = useComponent(entity, GLTFComponent)
@@ -240,20 +250,6 @@ export const GLTFComponent = defineComponent({
         ) : null}
       </>
     )
-  },
-
-  getInstanceID: (entity: Entity) => {
-    const uuid = getOptionalComponent(entity, UUIDComponent)
-    const src = getOptionalComponent(entity, GLTFComponent)?.src
-    if (!uuid || !src) return ''
-    return `${uuid}-${src}`
-  },
-
-  useInstanceID: (entity: Entity) => {
-    const uuid = useOptionalComponent(entity, UUIDComponent)?.value
-    const src = useOptionalComponent(entity, GLTFComponent)?.src.value
-    if (!uuid || !src) return ''
-    return `${uuid}-${src}`
   }
 })
 

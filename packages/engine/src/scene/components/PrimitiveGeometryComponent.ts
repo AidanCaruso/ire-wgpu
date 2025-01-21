@@ -35,7 +35,7 @@ import {
 import { useEntityContext } from '@ir-engine/ecs/src/EntityFunctions'
 import { S } from '@ir-engine/ecs/src/schemas/JSONSchemas'
 import { useMutableState } from '@ir-engine/hyperflux'
-import { EngineState } from '@ir-engine/spatial/src/EngineState'
+import { ReferenceSpaceState } from '@ir-engine/spatial'
 import { Geometry } from '@ir-engine/spatial/src/common/constants/Geometry'
 import { cubeVertexArray } from '@ir-engine/spatial/src/common/primitives/cube'
 import { createSphereVertexArray } from '@ir-engine/spatial/src/common/primitives/sphere'
@@ -65,7 +65,7 @@ export const PrimitiveGeometryComponent = defineComponent({
 
   reactor: () => {
     const entity = useEntityContext()
-    const viewer = useMutableState(EngineState).viewerEntity
+    const viewer = useMutableState(ReferenceSpaceState).viewerEntity
     const renderer = useOptionalComponent(viewer.value, WgpuRendererComponent)
 
     useEffect(() => {

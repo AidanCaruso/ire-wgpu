@@ -26,11 +26,11 @@ Infinite Reality Engine. All Rights Reserved.
 import { ArrayCamera, PerspectiveCamera } from 'three'
 
 import { useEntityContext } from '@ir-engine/ecs'
-import { defineComponent, useComponent } from '@ir-engine/ecs/src/ComponentFunctions'
+import { defineComponent, removeComponent, setComponent, useComponent } from '@ir-engine/ecs/src/ComponentFunctions'
 import { S } from '@ir-engine/ecs/src/schemas/JSONSchemas'
 import { useImmediateEffect } from '@ir-engine/hyperflux'
 import { Mat4, mat4 } from 'wgpu-matrix'
-import { addObjectToGroup, removeObjectFromGroup } from '../../renderer/components/GroupComponent'
+import { ObjectComponent } from '../../renderer/components/ObjectComponent'
 import { T } from '../../schema/schemaFunctions'
 
 export const wgpuCameraComponent = defineComponent({
@@ -62,9 +62,9 @@ export const CameraComponent = defineComponent({
 
     useImmediateEffect(() => {
       const camera = cameraComponent.value as ArrayCamera
-      addObjectToGroup(entity, camera)
+      setComponent(entity, ObjectComponent, camera)
       return () => {
-        removeObjectFromGroup(entity, camera)
+        removeComponent(entity, ObjectComponent)
       }
     }, [])
     return null

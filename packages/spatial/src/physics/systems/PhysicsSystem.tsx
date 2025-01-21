@@ -23,7 +23,6 @@ All portions of the code written by the Infinite Reality Engine team are Copyrig
 Infinite Reality Engine. All Rights Reserved.
 */
 
-import { Not } from 'bitecs'
 import { useEffect } from 'react'
 
 import { getComponent, removeComponent, useComponent } from '@ir-engine/ecs/src/ComponentFunctions'
@@ -35,10 +34,9 @@ import { SimulationSystemGroup } from '@ir-engine/ecs/src/SystemGroups'
 import { getMutableState, getState, none, useHookstate } from '@ir-engine/hyperflux'
 import { NetworkState } from '@ir-engine/network'
 
-import { UUIDComponent, useEntityContext } from '@ir-engine/ecs'
+import { EngineState, Not, UUIDComponent, useEntityContext } from '@ir-engine/ecs'
 import React from 'react'
 import { Vector3 } from 'three'
-import { EngineState } from '../../EngineState'
 import { InputHeuristicState, IntersectionData } from '../../input/functions/ClientInputHeuristics'
 import { SceneComponent } from '../../renderer/components/SceneComponents'
 import { TransformComponent } from '../../transform/components/TransformComponent'

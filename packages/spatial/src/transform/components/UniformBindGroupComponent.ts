@@ -23,8 +23,78 @@ All portions of the code written by the Infinite Reality Engine team are Copyrig
 Infinite Reality Engine. All Rights Reserved.
 */
 
-import { defineComponent, S } from '@ir-engine/ecs'
+import { defineComponent, getComponent, S, setComponent } from '@ir-engine/ecs'
+import { getState } from '@ir-engine/hyperflux'
+import { ReferenceSpaceState } from '../../ReferenceSpaceState'
+import { WgpuRendererComponent } from '../../renderer/WebGPURendererSystem'
 
+export const WgpuMeshComponent = defineComponent({
+  name: 'WgpuMeshComponent',
+
+  schema: S.Object({
+    vertexArray: S.Type<Float32Array>(),
+    vertexCount: S.Number(0)
+  }),
+
+  /*@todo: These components should go on entities in a rendering layer
+mapped to their source entities */
+  onSet: (entity, component, args: { vertexArray: Float32Array; vertexCount: number }) => {
+    component.vertexArray.set(args.vertexArray)
+    component.vertexCount.set(args.vertexCount)
+    const viewer = getState(ReferenceSpaceState).viewerEntity
+    const renderer = getComponent(viewer, WgpuRendererComponent)
+    const meshComponent = getComponent(entity, WgpuMeshComponent)
+    const vertexArray = meshComponent.vertexArray
+    const vertexCount = meshComponent.vertexCount
+
+    const device = renderer.device!
+    setComponent(entity, VertexBufferComponent, {
+      buffer: device.createBuffer({
+        size: vertexArray.byteLength,
+        usage: GPUBufferUsage.VERTEX,
+        mappedAtCreation: true
+      }),
+      vertexLength: vertexCount
+    })
+    const vertexBuffer = getComponent(entity, VertexBufferComponent).buffer
+    new Float32Array(vertexBuffer.getMappedRange()).set(vertexArray)
+
+    vertexBuffer.unmap()
+
+    setComponent(
+      entity,
+      UniformBufferComponent,
+      device.createBuffer({
+        size: 2048,
+        usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+      })
+    )
+    setComponent(entity, UniformBindGroupComponent, {
+      bindGroup: device.createBindGroup({
+        layout: renderer.pipeline!.getBindGroupLayout(0),
+        entries: [
+          {
+            binding: 0,
+            resource: {
+              buffer: getComponent(entity, UniformBufferComponent)
+            }
+          }
+        ]
+      }),
+      offset: 0
+    })
+  },
+
+  onRemove: (entity, component) => {
+    const vertexBuffer = getComponent(entity, VertexBufferComponent).buffer
+    vertexBuffer.destroy()
+    const uniformBuffer = getComponent(entity, UniformBufferComponent)
+    uniformBuffer.destroy()
+  }
+})
+
+/*@todo: These components should go on entities in a rendering layer
+mapped to their source entities */
 export const UniformBindGroupComponent = defineComponent({
   name: 'UniformBindGroupComponent',
 

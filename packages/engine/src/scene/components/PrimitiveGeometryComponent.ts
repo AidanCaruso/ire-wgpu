@@ -27,7 +27,6 @@ import { useEffect, useLayoutEffect } from 'react'
 
 import {
   defineComponent,
-  getComponent,
   setComponent,
   useComponent,
   useOptionalComponent
@@ -37,15 +36,10 @@ import { S } from '@ir-engine/ecs/src/schemas/JSONSchemas'
 import { useMutableState } from '@ir-engine/hyperflux'
 import { ReferenceSpaceState } from '@ir-engine/spatial'
 import { Geometry } from '@ir-engine/spatial/src/common/constants/Geometry'
-import { cubeVertexArray } from '@ir-engine/spatial/src/common/primitives/cube'
 import { createSphereVertexArray } from '@ir-engine/spatial/src/common/primitives/sphere'
 import { WgpuRendererComponent } from '@ir-engine/spatial/src/renderer/WebGPURendererSystem'
 import { useMeshComponent } from '@ir-engine/spatial/src/renderer/components/MeshComponent'
-import {
-  UniformBindGroupComponent,
-  UniformBufferComponent,
-  VertexBufferComponent
-} from '@ir-engine/spatial/src/transform/components/UniformBindGroupComponent'
+import { WgpuMeshComponent } from '@ir-engine/spatial/src/transform/components/UniformBindGroupComponent'
 import { MeshStandardMaterial } from 'three'
 import { GeometryTypeEnum, GeometryTypeToFactory } from '../constants/GeometryTypeEnum'
 const createGeometry = (geometryType: GeometryTypeEnum, geometryParams: Record<string, any>): Geometry => {
@@ -71,49 +65,15 @@ export const PrimitiveGeometryComponent = defineComponent({
     useEffect(() => {
       if (!renderer?.pipeline.value) return
 
-      // -webgpu logic-
       // For now let's just pretend all primitive geometry are spheres ;)
       // And no, this is not how it should be done AT ALL, but it's a start
       const sphereVertices = createSphereVertexArray(8, 8)
-      console.log(cubeVertexArray)
-      console.log(sphereVertices)
-      const device = renderer.device.value!
-      setComponent(entity, VertexBufferComponent, {
-        buffer: device.createBuffer({
-          size: sphereVertices.byteLength,
-          usage: GPUBufferUsage.VERTEX,
-          mappedAtCreation: true
-        }),
-        vertexLength: sphereVertices.length / 10
-      })
-      const vertexBuffer = getComponent(entity, VertexBufferComponent).buffer
-      new Float32Array(vertexBuffer.getMappedRange()).set(sphereVertices)
-
-      vertexBuffer.unmap()
-
-      setComponent(
-        entity,
-        UniformBufferComponent,
-        device.createBuffer({
-          size: 2048,
-          usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
-        })
-      )
-      setComponent(entity, UniformBindGroupComponent, {
-        bindGroup: device.createBindGroup({
-          layout: renderer.pipeline.value!.getBindGroupLayout(0),
-          entries: [
-            {
-              binding: 0,
-              resource: {
-                buffer: getComponent(entity, UniformBufferComponent)
-              }
-            }
-          ]
-        }),
-        offset: 0
-      })
+      setComponent(entity, WgpuMeshComponent, { vertexArray: sphereVertices, vertexCount: sphereVertices.length / 10 })
     }, [renderer?.pipeline])
+
+    // useEffect(() => {
+
+    // }, [geometryComponent.geometryType])
 
     // -threejs logic-
     const geometryComponent = useComponent(entity, PrimitiveGeometryComponent)
